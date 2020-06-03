@@ -29,7 +29,7 @@ def gen_keys(bits):
 	etf_val = (p - 1) * (q - 1)
 	e = 65537
 	d = ext_euc(e, etf_val)[1] % etf_val
-	print(p, q)
+	#print(p, q)
 	if (d * e) % etf_val != 1:
 		raise Exception('Try again.')
 	pub_k = (p * q, e)

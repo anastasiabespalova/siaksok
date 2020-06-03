@@ -24,15 +24,15 @@ def read_passwords(file_name):
 		return pswds
 	with open(file_name, 'r') as f:
 		for s in f:
-			pswds += [s.split()[1]]
+			pswds += [s.split()[1:]]
 	return pswds
 	
-def add_password(file_name, pswd):
+def add_password(file_name, pswd, info):
 	pswds = read_passwords(file_name)
-	pswds += [pswd]
+	pswds += [(pswd, info)]
 	with open(file_name, 'w') as f:
 		for i, p in enumerate(pswds):
-			f.write('{}. {}\n'.format(i + 1, p))
+			f.write('{}. {} {}\n'.format(i + 1, p[0], p[1]))
 
 def encode_pswd(pswd):
 	if len(pswd) > 20:
@@ -95,7 +95,10 @@ def register(pswd, pub_rsa, prv_rsa, pub_rabin, prv_rabin):
 	b32_c_pq_signed = base64.b32encode(c_pq_signed)
 	write_file(b32_c_pq_signed, prv_rabin)
 
-def encode(pub_rabin, pub_rsa, password_local, pswd_file, verbose=True):
+def encode(pub_rabin, pub_rsa, password_local, pswd_file, info, verbose=True):
+	if len(password_local) < 10:
+		print('Password len should be greater than 10.')
+		sys.exit()
 	b32_c_n_signed = read_file(pub_rabin)
 	c_n_signed = base64.b32decode(b32_c_n_signed)
 	b32_pub_k = read_file(pub_rsa)
@@ -113,7 +116,7 @@ def encode(pub_rabin, pub_rsa, password_local, pswd_file, verbose=True):
 		signed_i_pswd = int(M2 + i_pswd)
 		c_signed_i_pswd = encode_rabin(signed_i_pswd, int(n))
 		if pswd_file:
-			add_password(args.pswd_file, c_signed_i_pswd)
+			add_password(args.pswd_file, c_signed_i_pswd, info)
 		else:
 			if verbose:
 				print('Your cyphered password:', c_signed_i_pswd)
@@ -145,7 +148,7 @@ def decode(password_global, password_local, prv_rsa, prv_rabin, pswd_file, pswd_
 		print('Wrong global password!')
 		sys.exit()
 	if pswd_file:
-		c_signed_i_pswd = int(read_passwords(pswd_file)[pswd_num - 1])
+		c_signed_i_pswd = int(read_passwords(pswd_file)[pswd_num - 1][0])
 	else:
 		c_signed_i_pswd = int(password_local)
 	pswds = decode_rabin(c_signed_i_pswd, int(p), int(q))
@@ -175,6 +178,7 @@ if __name__ == '__main__':
 	parser.add_argument('--password_global_new', type=str, default=None)
 	parser.add_argument('--pswd_file', type=str, default=None)
 	parser.add_argument('--pswd_num', type=int, default=1)
+	parser.add_argument('--info', type=str, default='No_info')
 	args = parser.parse_args()	
 	regimes = ['register',
 		'change_pswd',
@@ -182,13 +186,21 @@ if __name__ == '__main__':
 		'decode']
 	if args.regime == 'register':
 		pswd = args.password_global
+		if len(args.password_global) < 10:
+			print('Global password size shold be geater than 10')
+			sys.exit()
+
 		register(pswd, args.pub_rsa, args.prv_rsa, args.pub_rabin, args.prv_rabin)
 	elif args.regime == 'change_pswd':
+		if len(args.password_global_new) < 10:
+			print('Global password size shold be geater than 10')
+			sys.exit()
+
 		if args.pswd_file:
 			decoded_pswds = []
 			pswds = read_passwords(args.pswd_file)
 			for p in pswds:
-				decoded_pswds.append(decode(args.password_global, p, args.prv_rsa, args.prv_rabin, None, args.pswd_num))
+				decoded_pswds.append(decode(args.password_global, p[0], args.prv_rsa, args.prv_rabin, None, args.pswd_num))
 		pswd = args.password_global
 		b32_priv_k = read_file(args.prv_rsa)
 		priv_k_new = base64.b32decode(b32_priv_k)
@@ -211,10 +223,13 @@ if __name__ == '__main__':
 		except:
 			print('Wrong global password!')
 			sys.exit()
-		if args.password_global_new is None:
+		if args.password_global_new is None or len(args.password_global_new) < 10:
 			print('Please, enter new password!')
 			sys.exit()
 		pswd = args.password_global
+		if len(args.password_global) < 10:
+			print('Global password size shold be geater than 10')
+			sys.exit()
 		b32_priv_k = read_file(args.prv_rsa)
 		priv_k_new = base64.b32decode(b32_priv_k)
 		m = hashlib.shake_128()
@@ -236,12 +251,14 @@ if __name__ == '__main__':
 		except:
 			print('Wrong global password!')
 		if args.pswd_file:
+			i = 0
 			os.remove(args.pswd_file)
 			coded_pswds = []
 			for p in decoded_pswds:
-				coded_pswds.append(encode(args.pub_rabin, args.pub_rsa, p, args.pswd_file))
+				coded_pswds.append(encode(args.pub_rabin, args.pub_rsa, p, args.pswd_file, info=pswds[i][1]))
+				i += 1
 	elif args.regime == 'encode':
-		encode(args.pub_rabin, args.pub_rsa, args.password_local, args.pswd_file)
+		encode(args.pub_rabin, args.pub_rsa, args.password_local, args.pswd_file, info=args.info)
 	elif args.regime == 'decode':
 		decode(args.password_global, args.password_local, args.prv_rsa, args.prv_rabin, args.pswd_file, args.pswd_num)
 	else:
